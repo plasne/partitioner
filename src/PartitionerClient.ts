@@ -10,6 +10,7 @@ export declare interface PartitionerClient {
     ): this;
     on(event: 'assign', listener: (partition: IPartition) => void): this;
     on(event: 'unassign', listener: (partition: IPartition) => void): this;
+    on(event: 'settle', listener: () => void): this;
     on(event: 'listen', listener: () => void): this;
     on(event: 'connect', listener: () => void): this;
     on(event: 'checkin', listener: () => void): this;
@@ -31,9 +32,31 @@ export declare interface PartitionerClient {
 // define server logic
 export class PartitionerClient extends TcpClient {
     public partitions: IPartition[] = [];
+    public isUnsettled: boolean = false;
 
     public constructor(options?: ITcpClientOptions) {
         super(options);
+    }
+
+    public waitOnSettle() {
+        return new Promise(resolve => {
+            if (this.isUnsettled) {
+                this.once('settle', () => {
+                    resolve();
+                });
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    public unsettle() {
+        this.isUnsettled = true;
+    }
+
+    public settle() {
+        this.isUnsettled = false;
+        this.emit('settle');
     }
 
     public connect() {
@@ -60,7 +83,7 @@ export class PartitionerClient extends TcpClient {
         //  returns an array of partitions with the most up-to-date pointer
         this.on(
             'cmd:unassign',
-            (payload: IPartition | IPartition[], respond) => {
+            async (payload: IPartition | IPartition[], respond) => {
                 const closed: IPartition[] = [];
                 try {
                     const partitions = Array.isArray(payload)
@@ -68,6 +91,7 @@ export class PartitionerClient extends TcpClient {
                         : [payload];
 
                     // wait on fetch to get the final pointer point
+                    await this.waitOnSettle();
 
                     // remove each
                     for (const partition of partitions) {
@@ -86,6 +110,16 @@ export class PartitionerClient extends TcpClient {
                 if (respond) respond(closed);
             }
         );
+
+        // handle "ask" (for which partitions the client would like)
+        this.on('cmd:ask', (_, respond) => {
+            try {
+                this.sendCommand('assign', this.partitions);
+            } catch (error) {
+                this.emit('error', error, 'unassign');
+            }
+            if (respond) respond(closed);
+        });
 
         // connect
         super.connect();

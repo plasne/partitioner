@@ -1,6 +1,7 @@
 "use strict";
 // TODO: needs to support committing checkpoints to some kind of state
 // TODO: need to document stuff better
+// TODO: support clients sending unassign if they want to gracefully shutdown
 Object.defineProperty(exports, "__esModule", { value: true });
 // includes
 const tcp_comm_1 = require("tcp-comm");
@@ -10,6 +11,7 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
     constructor(options) {
         super(options);
         this.partitions = [];
+        this.isLearning = false;
         // options or defaults
         this.options = options || {};
         if (options) {
@@ -26,16 +28,32 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         const local = this.options;
         return local.imbalance || 0;
     }
+    get learnFor() {
+        const local = this.options;
+        return local.learnFor || 60000;
+    }
     listen() {
-        // once listening has started, start rebalancing
+        // once listening has started, start timed processes
         this.on('listen', () => {
-            setTimeout(() => {
-                this.rebalance();
-            }, this.rebalanceEvery);
+            // start rebalancing
+            this.scheduleRebalance();
+            // start learning
+            if (this.learnFor > 0) {
+                this.emit('learning');
+                this.isLearning = true;
+                setTimeout(() => {
+                    this.isLearning = false;
+                    this.emit('managing');
+                }, this.learnFor);
+            }
+            else {
+                this.emit('managing');
+            }
         });
         // when clients connect, give them all their current partitions
         this.on('connect', client => {
             if (client.socket) {
+                // on connect, send an list of partitions that are currently assigned
                 const partitions = this.partitions.reduce((array, partition) => {
                     if (partition.client === client) {
                         array.push({
@@ -48,6 +66,10 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
                 if (partitions.length > 0) {
                     this.sendCommand(client, 'assign', partitions);
                 }
+                // if learning, send a request to the client to tell of any partitions it knows of
+                if (this.isLearning) {
+                    this.sendCommand(client, 'ask', null);
+                }
             }
         });
         // propogate more explict naming
@@ -57,13 +79,46 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         this.on('remove', client => {
             this.emit('remove-client', client);
         });
+        // accept partitions from clients during learning mode
+        this.on('cmd:assign', (client, payload, respond) => {
+            try {
+                const partitions = Array.isArray(payload)
+                    ? payload
+                    : [payload];
+                for (const partition of partitions) {
+                    const existing = this.partitions.find(p => p.id === partition.id);
+                    if (!existing) {
+                        this.partitions.push(partition);
+                        this.emit('add-partition', partition);
+                        partition.client = client;
+                        this.emit('assign', partition);
+                    }
+                    else if (!existing.client) {
+                        existing.client = client;
+                        this.emit('assign', existing);
+                    }
+                }
+            }
+            catch (error) {
+                this.emit('error', error, 'assign');
+            }
+            if (respond)
+                respond();
+        });
         // start listening
         super.listen();
     }
     counts() {
         const counts = [];
         for (const client of this.clients) {
-            const count = this.partitions.filter(p => p.client && p.client.id === client.id).length;
+            const count = this.partitions.filter(p => {
+                if (p.yieldTo) {
+                    return p.yieldTo.id === client.id;
+                }
+                else {
+                    return p.client && p.client.id === client.id;
+                }
+            }).length;
             counts.push({
                 client,
                 count
@@ -75,6 +130,11 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         try {
             // TODO: right now if there are more clients than partitions, nothing rebalances
             //   this is due to (< min) where min is 0
+            // do not rebalance while learning
+            if (this.isLearning) {
+                this.scheduleRebalance();
+                return;
+            }
             // clear any clients that are not connected
             for (const client of this.clients) {
                 if (!client.socket) {
@@ -152,9 +212,7 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         catch (error) {
             this.emit('error', error, 'rebalance');
         }
-        setTimeout(() => {
-            this.rebalance();
-        }, this.rebalanceEvery);
+        this.scheduleRebalance();
     }
     addPartition(partition) {
         const existing = this.partitions.find(p => p.id === partition.id);
@@ -187,8 +245,10 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
                     }, {
                         receipt: true
                     });
+                    // unassign
+                    this.emit('unassign', partition);
+                    partition.client = undefined;
                     // the most up-to-date pointer is returned
-                    console.log(`responded with: ${JSON.stringify(closed)}`);
                     return closed.find(p => p.id === partition.id);
                 }
             }
@@ -200,6 +260,7 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         // assign function
         const assign = async () => {
             try {
+                // ask the new client to take it
                 if (partition.yieldTo && partition.yieldTo.socket) {
                     await this.sendCommand(partition.yieldTo, 'assign', {
                         id: partition.id,
@@ -207,6 +268,10 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
                     }, {
                         receipt: true
                     });
+                    // assign
+                    partition.client = partition.yieldTo;
+                    partition.yieldTo = undefined;
+                    this.emit('assign', partition);
                 }
             }
             catch (error) {
@@ -218,9 +283,11 @@ class PartitionerServer extends tcp_comm_1.TcpServer {
         if (updated && updated.pointer)
             partition.pointer = updated.pointer;
         await assign();
-        // update the yield property
-        partition.client = partition.yieldTo;
-        partition.yieldTo = undefined;
+    }
+    scheduleRebalance() {
+        setTimeout(() => {
+            this.rebalance();
+        }, this.rebalanceEvery);
     }
 }
 exports.PartitionerServer = PartitionerServer;

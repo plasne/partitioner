@@ -20,6 +20,7 @@ cmd.option('-l, --log-level <s>', 'LOG_LEVEL. The minimum level to log (error, w
     .option('-r, --rebalance <i>', '[REQUIRED] REBALANCE. The number of milliseconds between rebalancing the partitions. Default is "10000" (10 seconds).', parseInt)
     .option('-i, --imbalance <i>', '[REQUIRED] IMBALANCE. If set to "0" the partitions will distributed equally, with a greater number, REBALANCE will allow a client to have more partitions than its peers per this value. Default is "0".', parseInt)
     .option('-t, --timeout <i>', '[REQUIRED] TIMEOUT. A client must checkin within the timeout period in milliseconds or its partitions will be reassigned. Default is "30000".', parseInt)
+    .option('-l, --learn-for <i>', '[REQUIRED] LEARN_FOR. The number of milliseconds after this application starts up that it will stay in learning mode. Default is "60000" (1 min).', parseInt)
     .parse(process.argv);
 // globals
 const LOG_LEVEL = cmd.logLevel || process.env.LOG_LEVEL || 'info';
@@ -27,6 +28,7 @@ const PORT = cmd.port || process.env.PORT;
 const REBALANCE = cmd.rebalance || process.env.REBALANCE;
 const IMBALANCE = cmd.imbalance || process.env.IMBALANCE;
 const TIMEOUT = cmd.timeout || process.env.TIMEOUT;
+const LEARN_FOR = cmd.learnFor || process.env.LEARN_FOR;
 // start logging
 const logColors = {
     debug: '\x1b[32m',
@@ -53,12 +55,19 @@ async function setup() {
         // define the connection
         const server = new PartitionerServer_1.PartitionerServer({
             imbalance: IMBALANCE,
+            learnFor: LEARN_FOR,
             port: PORT,
             rebalance: REBALANCE,
             timeout: TIMEOUT
         })
             .on('listen', () => {
             logger.info(`listening on port ${server.port}.`);
+        })
+            .on('learning', () => {
+            logger.info('this application is now in learning mode.');
+        })
+            .on('managing', () => {
+            logger.info('this application is now actively managing partitions (not learning).');
         })
             .on('connect', client => {
             if (client.socket) {
@@ -122,6 +131,7 @@ async function setup() {
         logger.info(`REBALANCE is "${server.rebalanceEvery}".`);
         logger.info(`IMBALANCE is "${server.allowedImbalance}".`);
         logger.info(`TIMEOUT is "${server.timeout}".`);
+        logger.info(`LEARN_FOR is "${server.learnFor}".`);
         // start listening
         server.listen();
         // add some partitions

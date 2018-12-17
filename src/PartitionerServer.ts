@@ -1,5 +1,6 @@
 // TODO: needs to support committing checkpoints to some kind of state
 // TODO: need to document stuff better
+// TODO: support clients sending unassign if they want to gracefully shutdown
 
 // includes
 import { IClient, IMessage, ITcpServerOptions, TcpServer } from 'tcp-comm';
@@ -8,6 +9,7 @@ import IPartition from './IPartition';
 export interface IPartitionerServerOptions extends ITcpServerOptions {
     rebalance?: number;
     imbalance?: number;
+    learnFor?: number;
 }
 
 export interface ICount {
@@ -18,9 +20,18 @@ export interface ICount {
 /* tslint:disable */
 // I wish there was a way to not redeclare listen...error, but I haven't found a way
 export declare interface PartitionerServer {
-    on(event: string, listener: (...args) => void): this;
-    on(event: 'assign', listener: () => void): this;
-    on(event: 'unassign', listener: (client: IClient) => void): this;
+    on(
+        event: string,
+        listener: (
+            client: IClient,
+            payload: any,
+            respond?: (response?: any) => void
+        ) => void
+    ): this;
+    on(event: 'learning', listener: () => void): this;
+    on(event: 'managing', listener: () => void): this;
+    on(event: 'assign', listener: (partition: IPartition) => void): this;
+    on(event: 'unassign', listener: (partition: IPartition) => void): this;
     on(event: 'rebalance', listener: (client: IClient) => void): this;
     on(event: 'add-partition', listener: (partition: IPartition) => void): this;
     on(
@@ -39,7 +50,11 @@ export declare interface PartitionerServer {
     on(event: 'timeout', listener: (client: IClient) => void): this;
     on(
         event: 'data',
-        listener: (payload: any, respond?: (response?: any) => void) => void
+        listener: (
+            client: IClient,
+            payload: any,
+            respond?: (response?: any) => void
+        ) => void
     ): this;
     on(event: 'ack', listener: (ack: IMessage, msg: IMessage) => void): this;
     on(
@@ -53,6 +68,7 @@ export declare interface PartitionerServer {
 // define server logic
 export class PartitionerServer extends TcpServer {
     public partitions: IPartition[] = [];
+    public isLearning: boolean = false;
 
     public constructor(options?: IPartitionerServerOptions) {
         super(options);
@@ -76,17 +92,34 @@ export class PartitionerServer extends TcpServer {
         return local.imbalance || 0;
     }
 
+    public get learnFor() {
+        const local: IPartitionerServerOptions = this.options;
+        return local.learnFor || 60000;
+    }
+
     public listen() {
-        // once listening has started, start rebalancing
+        // once listening has started, start timed processes
         this.on('listen', () => {
-            setTimeout(() => {
-                this.rebalance();
-            }, this.rebalanceEvery);
+            // start rebalancing
+            this.scheduleRebalance();
+
+            // start learning
+            if (this.learnFor > 0) {
+                this.emit('learning');
+                this.isLearning = true;
+                setTimeout(() => {
+                    this.isLearning = false;
+                    this.emit('managing');
+                }, this.learnFor);
+            } else {
+                this.emit('managing');
+            }
         });
 
         // when clients connect, give them all their current partitions
         this.on('connect', client => {
             if (client.socket) {
+                // on connect, send an list of partitions that are currently assigned
                 const partitions = this.partitions.reduce(
                     (array, partition) => {
                         if (partition.client === client) {
@@ -102,6 +135,11 @@ export class PartitionerServer extends TcpServer {
                 if (partitions.length > 0) {
                     this.sendCommand(client, 'assign', partitions);
                 }
+
+                // if learning, send a request to the client to tell of any partitions it knows of
+                if (this.isLearning) {
+                    this.sendCommand(client, 'ask', null);
+                }
             }
         });
 
@@ -113,6 +151,83 @@ export class PartitionerServer extends TcpServer {
             this.emit('remove-client', client);
         });
 
+        // allow clients to add partitions
+        this.on(
+            'cmd:add-partition',
+            (_, payload: IPartition | IPartition[], respond) => {
+                try {
+                    const partitions = Array.isArray(payload)
+                        ? payload
+                        : [payload];
+                    for (const partition of partitions) {
+                        const existing = this.partitions.find(
+                            p => p.id === partition.id
+                        );
+                        if (!existing) {
+                            this.partitions.push(partition);
+                            this.emit('add-partition', partition);
+                        }
+                    }
+                } catch (error) {
+                    this.emit('error', error, 'add');
+                }
+                if (respond) respond();
+            }
+        );
+
+        // allow clients to remove partitions
+        this.on(
+            'cmd:remove-partition',
+            (_, payload: IPartition | IPartition[], respond) => {
+                try {
+                    const partitions = Array.isArray(payload)
+                        ? payload
+                        : [payload];
+                    for (const partition of partitions) {
+                        const index = this.partitions.findIndex(
+                            p => p.id === partition.id
+                        );
+                        if (index > -1) {
+                            this.partitions.splice(index, 1);
+                            this.emit('remove-partition', partition);
+                        }
+                    }
+                } catch (error) {
+                    this.emit('error', error, 'remove');
+                }
+                if (respond) respond();
+            }
+        );
+
+        // accept partitions from clients during learning mode
+        this.on(
+            'cmd:assign',
+            (client, payload: IPartition | IPartition[], respond) => {
+                try {
+                    const partitions = Array.isArray(payload)
+                        ? payload
+                        : [payload];
+                    for (const partition of partitions) {
+                        const existing = this.partitions.find(
+                            p => p.id === partition.id
+                        );
+                        if (!existing) {
+                            this.partitions.push(partition);
+                            this.emit('add-partition', partition);
+                            partition.client = client;
+                            this.emit('assign', partition);
+                        } else if (!existing.client) {
+                            existing.client = client;
+                            this.emit('assign', existing);
+                        }
+                    }
+                } catch (error) {
+                    this.emit('error', error, 'assign');
+                }
+                if (respond) respond();
+            }
+        );
+
         // start listening
         super.listen();
     }
@@ -120,9 +235,13 @@ export class PartitionerServer extends TcpServer {
     public counts() {
         const counts: ICount[] = [];
         for (const client of this.clients) {
-            const count = this.partitions.filter(
-                p => p.client && p.client.id === client.id
-            ).length;
+            const count = this.partitions.filter(p => {
+                if (p.yieldTo) {
+                    return p.yieldTo.id === client.id;
+                } else {
+                    return p.client && p.client.id === client.id;
+                }
+            }).length;
             counts.push({
                 client,
                 count
@@ -135,6 +254,12 @@ export class PartitionerServer extends TcpServer {
         try {
             // TODO: right now if there are more clients than partitions, nothing rebalances
             //   this is due to (< min) where min is 0
+
+            // do not rebalance while learning
+            if (this.isLearning) {
+                this.scheduleRebalance();
+                return;
+            }
 
             // clear any clients that are not connected
             for (const client of this.clients) {
@@ -151,8 +276,6 @@ export class PartitionerServer extends TcpServer {
                     this.remove(client);
                 }
             }
-
-            // remove any clients that are
 
             // if there are no clients; there is nothing to rebalance
             if (this.clients.length > 0) {
@@ -226,9 +349,7 @@ export class PartitionerServer extends TcpServer {
         } catch (error) {
             this.emit('error', error, 'rebalance');
         }
-        setTimeout(() => {
-            this.rebalance();
-        }, this.rebalanceEvery);
+        this.scheduleRebalance();
     }
 
     public addPartition(partition: IPartition) {
@@ -272,6 +393,10 @@ export class PartitionerServer extends TcpServer {
                         }
                     );
 
+                    // unassign
+                    this.emit('unassign', partition);
+                    partition.client = undefined;
+
                     // the most up-to-date pointer is returned
                     return closed.find(p => p.id === partition.id);
                 }
@@ -284,6 +409,7 @@ export class PartitionerServer extends TcpServer {
         // assign function
         const assign = async () => {
             try {
+                // ask the new client to take it
                 if (partition.yieldTo && partition.yieldTo.socket) {
                     await this.sendCommand(
                         partition.yieldTo,
@@ -296,6 +422,11 @@ export class PartitionerServer extends TcpServer {
                             receipt: true
                         }
                     );
+
+                    // assign
+                    partition.client = partition.yieldTo;
+                    partition.yieldTo = undefined;
+                    this.emit('assign', partition);
                 }
             } catch (error) {
                 this.emit('error', error, 'reassign:assign');
@@ -306,9 +437,11 @@ export class PartitionerServer extends TcpServer {
         const updated = await unassign();
         if (updated && updated.pointer) partition.pointer = updated.pointer;
         await assign();
+    }
 
-        // update the yield property
-        partition.client = partition.yieldTo;
-        partition.yieldTo = undefined;
+    private scheduleRebalance() {
+        setTimeout(() => {
+            this.rebalance();
+        }, this.rebalanceEvery);
     }
 }

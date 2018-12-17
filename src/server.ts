@@ -34,6 +34,11 @@ cmd.option(
         '[REQUIRED] TIMEOUT. A client must checkin within the timeout period in milliseconds or its partitions will be reassigned. Default is "30000".',
         parseInt
     )
+    .option(
+        '-l, --learn-for <i>',
+        '[REQUIRED] LEARN_FOR. The number of milliseconds after this application starts up that it will stay in learning mode. Default is "60000" (1 min).',
+        parseInt
+    )
     .parse(process.argv);
 
 // globals
@@ -42,6 +47,7 @@ const PORT = cmd.port || process.env.PORT;
 const REBALANCE = cmd.rebalance || process.env.REBALANCE;
 const IMBALANCE = cmd.imbalance || process.env.IMBALANCE;
 const TIMEOUT = cmd.timeout || process.env.TIMEOUT;
+const LEARN_FOR = cmd.learnFor || process.env.LEARN_FOR;
 
 // start logging
 const logColors: {
@@ -78,12 +84,21 @@ async function setup() {
         // define the connection
         const server = new PartitionerServer({
             imbalance: IMBALANCE,
+            learnFor: LEARN_FOR,
             port: PORT,
             rebalance: REBALANCE,
             timeout: TIMEOUT
         })
             .on('listen', () => {
                 logger.info(`listening on port ${server.port}.`);
+            })
+            .on('learning', () => {
+                logger.info('this application is now in learning mode.');
+            })
+            .on('managing', () => {
+                logger.info(
+                    'this application is now actively managing partitions (not learning).'
+                );
             })
             .on('connect', client => {
                 if (client.socket) {
@@ -169,6 +184,7 @@ async function setup() {
         logger.info(`REBALANCE is "${server.rebalanceEvery}".`);
         logger.info(`IMBALANCE is "${server.allowedImbalance}".`);
         logger.info(`TIMEOUT is "${server.timeout}".`);
+        logger.info(`LEARN_FOR is "${server.learnFor}".`);
 
         // start listening
         server.listen();

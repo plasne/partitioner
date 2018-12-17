@@ -8,6 +8,19 @@ class PartitionerClient extends tcp_comm_1.TcpClient {
     constructor(options) {
         super(options);
         this.partitions = [];
+        this.isUnsettled = false;
+    }
+    waitOnSettle() {
+        return new Promise(resolve => {
+            if (this.isUnsettled) {
+                this.once('settle', () => {
+                    resolve();
+                });
+            }
+            else {
+                resolve();
+            }
+        });
     }
     connect() {
         // handle "assign"
@@ -30,13 +43,14 @@ class PartitionerClient extends tcp_comm_1.TcpClient {
         });
         // handle "unassign"
         //  returns an array of partitions with the most up-to-date pointer
-        this.on('cmd:unassign', (payload, respond) => {
+        this.on('cmd:unassign', async (payload, respond) => {
             const closed = [];
             try {
                 const partitions = Array.isArray(payload)
                     ? payload
                     : [payload];
                 // wait on fetch to get the final pointer point
+                await this.waitOnSettle();
                 // remove each
                 for (const partition of partitions) {
                     const index = this.partitions.findIndex(p => p.id === partition.id);
@@ -46,6 +60,18 @@ class PartitionerClient extends tcp_comm_1.TcpClient {
                         closed.push(partition);
                     }
                 }
+            }
+            catch (error) {
+                this.emit('error', error, 'unassign');
+            }
+            if (respond) {
+                // respond(closed);
+            }
+        });
+        // handle "ask" (for which partitions the client would like)
+        this.on('cmd:ask', (_, respond) => {
+            try {
+                this.sendCommand('assign', this.partitions);
             }
             catch (error) {
                 this.emit('error', error, 'unassign');

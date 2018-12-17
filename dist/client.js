@@ -66,6 +66,9 @@ async function setup() {
             .on('assign', (partition) => {
             logger.info(`assigned partition "${partition.id}".`);
         })
+            .on('unassign', (partition) => {
+            logger.info(`unassigned partition "${partition.id}".`);
+        })
             .on('error', (error, module) => {
             logger.error(`there was an error raised in module "${module}"...`);
             logger.error(error.stack ? error.stack : error.message);
