@@ -15,7 +15,7 @@ cmd.option(
     /^(error|warn|info|verbose|debug|silly)$/i
 )
     .option(
-        '-p, --port <s>',
+        '-p, --port <i>',
         '[REQUIRED] PORT. The port that is presenting the tcp interface. Default is "8000".',
         parseInt
     )

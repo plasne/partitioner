@@ -24,7 +24,7 @@ cmd.option(
     )
     .option(
         '-p, --port <s>',
-        'PORT. The port that is presenting the tcp interface. Default is "8000".',
+        'PORT. The port to connect to on the server. Default is "8000".',
         parseInt
     )
     .parse(process.argv);

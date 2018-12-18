@@ -53,7 +53,7 @@ dotenv.config();
 cmd.option('-l, --log-level <s>', 'LOG_LEVEL. The minimum level to log (error, warn, info, verbose, debug, silly). Defaults to "info".', /^(error|warn|info|verbose|debug|silly)$/i)
     .option('-i, --client-id <s>', 'CLIENT_ID. The unique identifier of this client. Default is a random GUID, but this means if the client is recycled it cannot be reassigned to the previous partitions.')
     .option('-a, --address <s>', 'ADDRESS. The address of the server. Default is "127.0.0.1".')
-    .option('-p, --port <s>', 'PORT. The port that is presenting the tcp interface. Default is "8000".', parseInt)
+    .option('-p, --port <s>', 'PORT. The port to connect to on the server. Default is "8000".', parseInt)
     .parse(process.argv);
 // globals
 var LOG_LEVEL = cmd.logLevel || process.env.LOG_LEVEL || 'info';

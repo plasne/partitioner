@@ -51,7 +51,7 @@ var PartitionerServer_1 = require("./PartitionerServer");
 dotenv.config();
 // define options
 cmd.option('-l, --log-level <s>', 'LOG_LEVEL. The minimum level to log (error, warn, info, verbose, debug, silly). Defaults to "info".', /^(error|warn|info|verbose|debug|silly)$/i)
-    .option('-p, --port <s>', '[REQUIRED] PORT. The port that is presenting the tcp interface. Default is "8000".', parseInt)
+    .option('-p, --port <i>', '[REQUIRED] PORT. The port that is presenting the tcp interface. Default is "8000".', parseInt)
     .option('-r, --rebalance <i>', '[REQUIRED] REBALANCE. The number of milliseconds between rebalancing the partitions. Default is "10000" (10 seconds).', parseInt)
     .option('-i, --imbalance <i>', '[REQUIRED] IMBALANCE. If set to "0" the partitions will distributed equally, with a greater number, REBALANCE will allow a client to have more partitions than its peers per this value. Default is "0".', parseInt)
     .option('-t, --timeout <i>', '[REQUIRED] TIMEOUT. A client must checkin within the timeout period in milliseconds or its partitions will be reassigned. Default is "30000".', parseInt)
