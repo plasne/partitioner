@@ -19,8 +19,8 @@ export declare interface PartitionerServer {
     on(event: 'add-partition', listener: (partition: IPartition) => void): this;
     on(event: 'remove-partition', listener: (partition: IPartition) => void): this;
     on(event: 'listen', listener: () => void): this;
-    on(event: 'connect', listener: (client: IClient) => void): this;
-    on(event: 'checkin', listener: (client: IClient) => void): this;
+    on(event: 'connect', listener: (client: IClient, metadata: any) => void): this;
+    on(event: 'checkin', listener: (client: IClient, metadata: any) => void): this;
     on(event: 'disconnect', listener: (client?: IClient) => void): this;
     on(event: 'add', listener: (client: IClient) => void): this;
     on(event: 'add-client', listener: (client: IClient) => void): this;
