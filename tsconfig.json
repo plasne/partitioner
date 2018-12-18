@@ -2,7 +2,7 @@
     "include": ["./src/**/*"],
     "compilerOptions": {
         "outDir": "./dist",
-        "target": "esnext",
+        "target": "es5",
         "module": "commonjs",
         "lib": ["es2018", "dom"],
         "strict": true,
@@ -19,6 +19,6 @@
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": false,
         "moduleResolution": "node",
-        "declaration": false
+        "declaration": true
     }
 }
