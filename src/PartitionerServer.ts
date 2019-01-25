@@ -139,12 +139,12 @@ export class PartitionerServer extends TcpServer {
                     [] as IPartition[]
                 );
                 if (partitions.length > 0) {
-                    this.sendCommand(client, 'assign', partitions);
+                    this.tell(client, 'assign', partitions);
                 }
 
                 // if learning, send a request to the client to tell of any partitions it knows of
                 if (this.isLearning) {
-                    this.sendCommand(client, 'ask', null);
+                    this.tell(client, 'ask');
                 }
             }
         });
@@ -302,7 +302,7 @@ export class PartitionerServer extends TcpServer {
                     this.emit('assign', partition);
                     counts[0].count++;
                     if (partition.client.socket) {
-                        this.sendCommand(partition.client, 'assign', {
+                        this.tell(partition.client, 'assign', {
                             id: partition.id,
                             pointer: partition.id
                         });
@@ -388,14 +388,11 @@ export class PartitionerServer extends TcpServer {
             try {
                 // ask the current client to give it up
                 if (partition.client && partition.client.socket) {
-                    const closed: IPartition[] = await this.sendCommand(
+                    const closed: IPartition[] = await this.ask(
                         partition.client,
                         'unassign',
                         {
                             id: partition.id
-                        },
-                        {
-                            receipt: true
                         }
                     );
 
@@ -417,17 +414,10 @@ export class PartitionerServer extends TcpServer {
             try {
                 // ask the new client to take it
                 if (partition.yieldTo && partition.yieldTo.socket) {
-                    await this.sendCommand(
-                        partition.yieldTo,
-                        'assign',
-                        {
-                            id: partition.id,
-                            pointer: partition.pointer
-                        },
-                        {
-                            receipt: true
-                        }
-                    );
+                    await this.ask(partition.yieldTo, 'assign', {
+                        id: partition.id,
+                        pointer: partition.pointer
+                    });
 
                     // assign
                     partition.client = partition.yieldTo;

@@ -127,11 +127,11 @@ var PartitionerServer = /** @class */ (function (_super) {
                     return array;
                 }, []);
                 if (partitions.length > 0) {
-                    _this.sendCommand(client, 'assign', partitions);
+                    _this.tell(client, 'assign', partitions);
                 }
                 // if learning, send a request to the client to tell of any partitions it knows of
                 if (_this.isLearning) {
-                    _this.sendCommand(client, 'ask', null);
+                    _this.tell(client, 'ask');
                 }
             }
         });
@@ -286,7 +286,7 @@ var PartitionerServer = /** @class */ (function (_super) {
                     _this.emit('assign', partition);
                     counts_2[0].count++;
                     if (partition.client.socket) {
-                        _this.sendCommand(partition.client, 'assign', {
+                        _this.tell(partition.client, 'assign', {
                             id: partition.id,
                             pointer: partition.id
                         });
@@ -373,10 +373,8 @@ var PartitionerServer = /** @class */ (function (_super) {
                                     case 0:
                                         _a.trys.push([0, 3, , 4]);
                                         if (!(partition.client && partition.client.socket)) return [3 /*break*/, 2];
-                                        return [4 /*yield*/, this.sendCommand(partition.client, 'unassign', {
+                                        return [4 /*yield*/, this.ask(partition.client, 'unassign', {
                                                 id: partition.id
-                                            }, {
-                                                receipt: true
                                             })];
                                     case 1:
                                         closed_1 = _a.sent();
@@ -401,11 +399,9 @@ var PartitionerServer = /** @class */ (function (_super) {
                                     case 0:
                                         _a.trys.push([0, 3, , 4]);
                                         if (!(partition.yieldTo && partition.yieldTo.socket)) return [3 /*break*/, 2];
-                                        return [4 /*yield*/, this.sendCommand(partition.yieldTo, 'assign', {
+                                        return [4 /*yield*/, this.ask(partition.yieldTo, 'assign', {
                                                 id: partition.id,
                                                 pointer: partition.pointer
-                                            }, {
-                                                receipt: true
                                             })];
                                     case 1:
                                         _a.sent();

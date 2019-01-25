@@ -114,7 +114,7 @@ export class PartitionerClient extends TcpClient {
         // handle "ask" (for which partitions the client would like)
         this.on('cmd:ask', (_, respond) => {
             try {
-                this.sendCommand('assign', this.partitions);
+                this.tell('assign', this.partitions);
             } catch (error) {
                 this.emit('error', error, 'unassign');
             }

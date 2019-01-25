@@ -152,7 +152,7 @@ var PartitionerClient = /** @class */ (function (_super) {
         // handle "ask" (for which partitions the client would like)
         this.on('cmd:ask', function (_, respond) {
             try {
-                _this.sendCommand('assign', _this.partitions);
+                _this.tell('assign', _this.partitions);
             }
             catch (error) {
                 _this.emit('error', error, 'unassign');
