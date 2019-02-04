@@ -306,7 +306,7 @@ export class PartitionerServer extends TcpServer {
                         this.tell(partition.client, 'assign', {
                             id: partition.id,
                             metadata: partition.metadata,
-                            pointer: partition.id
+                            pointer: partition.pointer
                         });
                     }
                 };

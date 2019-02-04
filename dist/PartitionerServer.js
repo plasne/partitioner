@@ -290,7 +290,7 @@ var PartitionerServer = /** @class */ (function (_super) {
                         _this.tell(partition.client, 'assign', {
                             id: partition.id,
                             metadata: partition.metadata,
-                            pointer: partition.id
+                            pointer: partition.pointer
                         });
                     }
                 };
