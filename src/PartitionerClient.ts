@@ -123,5 +123,6 @@ export class PartitionerClient extends TcpClient {
 
         // connect
         super.connect();
+        return this;
     }
 }

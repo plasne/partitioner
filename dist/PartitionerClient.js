@@ -162,6 +162,7 @@ var PartitionerClient = /** @class */ (function (_super) {
         });
         // connect
         _super.prototype.connect.call(this);
+        return this;
     };
     return PartitionerClient;
 }(tcp_comm_1.TcpClient));

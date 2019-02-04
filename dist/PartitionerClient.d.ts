@@ -22,5 +22,5 @@ export declare class PartitionerClient extends TcpClient {
     waitOnSettle(): Promise<{}>;
     unsettle(): void;
     settle(): void;
-    connect(): void;
+    connect(): this;
 }
