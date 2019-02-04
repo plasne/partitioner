@@ -131,6 +131,7 @@ export class PartitionerServer extends TcpServer {
                         if (partition.client === client) {
                             array.push({
                                 id: partition.id,
+                                metadata: partition.metadata,
                                 pointer: partition.pointer
                             });
                         }
@@ -304,6 +305,7 @@ export class PartitionerServer extends TcpServer {
                     if (partition.client.socket) {
                         this.tell(partition.client, 'assign', {
                             id: partition.id,
+                            metadata: partition.metadata,
                             pointer: partition.id
                         });
                     }
@@ -370,7 +372,7 @@ export class PartitionerServer extends TcpServer {
         const index = this.partitions.indexOf(partition);
         if (index > -1) {
             this.partitions.splice(index, 1);
-            this.emit('remote-partition', partition);
+            this.emit('remove-partition', partition);
         }
     }
 
@@ -416,6 +418,7 @@ export class PartitionerServer extends TcpServer {
                 if (partition.yieldTo && partition.yieldTo.socket) {
                     await this.ask(partition.yieldTo, 'assign', {
                         id: partition.id,
+                        metadata: partition.metadata,
                         pointer: partition.pointer
                     });
 

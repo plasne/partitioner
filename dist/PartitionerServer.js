@@ -121,6 +121,7 @@ var PartitionerServer = /** @class */ (function (_super) {
                     if (partition.client === client) {
                         array.push({
                             id: partition.id,
+                            metadata: partition.metadata,
                             pointer: partition.pointer
                         });
                     }
@@ -288,6 +289,7 @@ var PartitionerServer = /** @class */ (function (_super) {
                     if (partition.client.socket) {
                         _this.tell(partition.client, 'assign', {
                             id: partition.id,
+                            metadata: partition.metadata,
                             pointer: partition.id
                         });
                     }
@@ -350,7 +352,7 @@ var PartitionerServer = /** @class */ (function (_super) {
         var index = this.partitions.indexOf(partition);
         if (index > -1) {
             this.partitions.splice(index, 1);
-            this.emit('remote-partition', partition);
+            this.emit('remove-partition', partition);
         }
     };
     PartitionerServer.prototype.addClient = function (client) {
@@ -401,6 +403,7 @@ var PartitionerServer = /** @class */ (function (_super) {
                                         if (!(partition.yieldTo && partition.yieldTo.socket)) return [3 /*break*/, 2];
                                         return [4 /*yield*/, this.ask(partition.yieldTo, 'assign', {
                                                 id: partition.id,
+                                                metadata: partition.metadata,
                                                 pointer: partition.pointer
                                             })];
                                     case 1:
