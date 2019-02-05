@@ -13,7 +13,7 @@ export declare interface PartitionerClient {
     on(event: 'settle', listener: () => void): this;
     on(event: 'listen', listener: () => void): this;
     on(event: 'connect', listener: () => void): this;
-    on(event: 'checkin', listener: () => void): this;
+    on(event: 'checkin', listener: (metadata?: any) => void): this;
     on(event: 'disconnect', listener: () => void): this;
     on(event: 'timeout', listener: () => void): this;
     on(
